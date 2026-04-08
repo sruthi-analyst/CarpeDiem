@@ -1,0 +1,30 @@
+Resolve:
+1.  policy page does not fetch any result - error = "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors."
+2. stock page says failed to fetch stock data, analyse the issue and ways to fix it
+3. list all abnormalities of pricing page and diversify saving page
+4. list all gaps in Tax page
+
+
+
+DB:-
+For Finance Chat (AI): By installing the pgvector extension on your Postgres, you can store and search your 768-dimensional Granite embeddings directly. You don't need a separate Vector DB.
+For Stock Analysis: Postgres is excellent for time-series data using standard indexing. It handles historical stock prices perfectly.
+For Expense Tracking: It provides the "Relational Integrity" required for money—no missing transactions or double-counting.
+For OCR & Receipts: Instead of using MongoDB, you can use the JSONB data type in Postgres. It stores unstructured receipt data just like Mongo does, but within your existing Postgres tables.
+| Feature                 | Raw Postgres | Supabase |
+| ----------------------- | ------------ | -------- |
+| pgvector                | ✅            | ✅        |
+| JSONB                   | ✅            | ✅        |
+| Auth                    | ❌            | ✅        |
+| File storage (receipts) | ❌            | ✅        |
+| APIs                    | ❌            | ✅        |
+| Realtime                | ❌            | ✅        |
+| Setup time              | HIGH         | LOW      |
+| Control                 | FULL         | MEDIUM   |
+
+chosen = SupaBase
+
+ollama installed, and granite3.3:2b model pulled at s:\ollama-models\
+
+PASTED FINHUB API KEY, USE IT TO DISPLAY LIVE STOCK DATA ON STOKS PAGE
+used finhub.io free api to fetch the stock live data
