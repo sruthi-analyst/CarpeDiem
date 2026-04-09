@@ -97,7 +97,7 @@ export default function StockAnalysis() {
         {!stockData && !loading && (
           <>
             <div className="text-center mb-10">
-              <h1 className="text-5xl font-extrabold mb-3">📊 Easy Stock Coach</h1>
+              <h1 className="text-5xl font-extrabold mb-3">Easy Stock Coach</h1>
               <p className="text-lg text-gray-700 max-w-2xl mx-auto">
                 No finance degree needed — type a stock or click below to get simple, clear insights.
               </p>
@@ -123,9 +123,8 @@ export default function StockAnalysis() {
                   {topMovers.map((m) => (
                     <div
                       key={m.symbol}
-                      className={`p-4 rounded-lg text-center font-semibold ${
-                        m.changePercent > 0 ? "bg-green-100" : "bg-red-100"
-                      }`}
+                      className={`p-4 rounded-lg text-center font-semibold ${m.changePercent > 0 ? "bg-green-100" : "bg-red-100"
+                        }`}
                     >
                       <p>{m.symbol}</p>
                       <p>{m.changePercent?.toFixed(2)}%</p>
@@ -163,13 +162,12 @@ export default function StockAnalysis() {
             </h2>
 
             <div
-              className={`p-4 rounded-lg ${
-                stockData.changePercent > 0
+              className={`p-4 rounded-lg ${stockData.changePercent > 0
                   ? "bg-green-100"
                   : stockData.changePercent < 0
-                  ? "bg-red-100"
-                  : "bg-gray-100"
-              }`}
+                    ? "bg-red-100"
+                    : "bg-gray-100"
+                }`}
             >
               <p className="text-lg font-semibold">{getPerformanceMessage()}</p>
               <p>
