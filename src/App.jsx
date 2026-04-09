@@ -9,6 +9,8 @@ import ChatbotSidebar from "./components/ChatbotSidebar";
 import { ScrollToTop } from "./components/ScrollToTop";
 import StockAnalysis from "./pages/StockAnalysis";
 import ShowPolicy from "./pages/ShowPolicy";
+import StockPredictor from "./pages/StockPredictor";
+import StockNews from "./pages/StockNews";
 
 function AppContent() {
   const location = useLocation();
@@ -26,6 +28,8 @@ function AppContent() {
         <Route path="/tax" element={<TaxAndReminder />} />
         <Route path="/stock" element={<StockAnalysis />} />
         <Route path="/policy" element={<ShowPolicy />} />
+        <Route path="/stock-predictor" element={<StockPredictor />} />
+        <Route path="/stock-news" element={<StockNews />} />
       </Routes>
 
       <ChatbotSidebar />

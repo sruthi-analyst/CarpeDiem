@@ -46,6 +46,20 @@ export default function Features() {
       color: "from-purple-500 to-pink-500",
       link: "/policy",
     },
+    {
+      title: "Stock Trend Predictor",
+      desc: "Utilize ML-based linear regression models to predict near-future stock prices.",
+      icon: <ChartBarIcon className="w-6 h-6 text-white" />,
+      color: "from-indigo-500 to-violet-500",
+      link: "/stock-predictor",
+    },
+    {
+      title: "Stock News",
+      desc: "Stay updated with the latest market and company news.",
+      icon: <ChatBubbleLeftRightIcon className="w-6 h-6 text-white" />,
+      color: "from-teal-500 to-emerald-500",
+      link: "/stock-news",
+    },
   ];
 
   return (

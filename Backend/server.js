@@ -442,7 +442,125 @@ app.get("/api/stock/:symbol", async (req, res) => {
   }
 });
 
-// ---- UPI Mock Data ----
+// ---- Latest Stock Market & Company News ----
+app.get("/api/market-news", async (req, res) => {
+  try {
+    const finhubKey = process.env.FINHUB_API_KEY;
+    if (!finhubKey) throw new Error("Finnhub Key missing");
+    
+    const { symbol } = req.query;
+    let url = `https://finnhub.io/api/v1/news?category=general&token=${finhubKey}`;
+    
+    if (symbol) {
+      let searchSymbol = symbol.toUpperCase();
+      if (!searchSymbol.includes(".") && ["RELIANCE", "TATAMOTORS", "TCS", "INFY"].includes(searchSymbol)) {
+          searchSymbol = `${searchSymbol}.NS`;
+      }
+      const toTimestamp = new Date().toISOString().split('T')[0];
+      const fromTimestamp = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0];
+      url = `https://finnhub.io/api/v1/company-news?symbol=${searchSymbol}&from=${fromTimestamp}&to=${toTimestamp}&token=${finhubKey}`;
+    }
+
+    const newsRes = await fetch(url);
+    const newsData = await newsRes.json();
+    return res.json(newsData);
+  } catch (err) {
+    console.warn("⚠️ Error fetching news:", err.message);
+    return res.status(500).json({ error: "Failed to fetch news" });
+  }
+});
+
+// ---- Stock Trend Predictor (Simple ML - Linear Regression) ----
+app.get("/api/stock-predict/:symbol", async (req, res) => {
+  const inputSymbol = req.params.symbol.toUpperCase();
+  try {
+    const finhubKey = process.env.FINHUB_API_KEY;
+    if (!finhubKey) throw new Error("Finnhub Key missing");
+
+    let searchSymbol = inputSymbol;
+    if (!inputSymbol.includes(".") && ["RELIANCE", "TATAMOTORS", "TCS", "INFY"].includes(inputSymbol)) {
+        searchSymbol = `${inputSymbol}.NS`;
+    }
+
+    // Fetch past 60 days history for training data
+    const toTimestamp = Math.floor(Date.now() / 1000);
+    const fromTimestamp = toTimestamp - (60 * 24 * 60 * 60);
+    const candleRes = await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${searchSymbol}&resolution=D&from=${fromTimestamp}&to=${toTimestamp}&token=${finhubKey}`);
+    const candleData = await candleRes.json();
+
+    if (!candleData || candleData.s !== "ok") {
+      throw new Error("Could not fetch historical data for prediction.");
+    }
+
+    const prices = candleData.c;
+    const n = prices.length;
+    
+    // Simple Linear Regression: y = mx + b
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+    for (let i = 0; i < n; i++) {
+        sumX += i;
+        sumY += prices[i];
+        sumXY += (i * prices[i]);
+        sumX2 += (i * i);
+    }
+    
+    const m = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    const b = (sumY - m * sumX) / n;
+
+    // Moving average prediction
+    const windowSize = 5;
+    const recentPrices = prices.slice(-windowSize);
+    const movingAverage = recentPrices.reduce((a, b) => a + b, 0) / windowSize;
+
+    // Predict next 5 days combining ML (Linear Regression) and recent moving average bias
+    const predictions = [];
+    for (let i = 1; i <= 5; i++) {
+        let lrPrediction = m * (n + i - 1) + b;
+        // Blend linear regression with moving average to dampen extreme slopes
+        let blendedPrediction = (lrPrediction * 0.7) + (movingAverage * 0.3); 
+        predictions.push({
+            day: i,
+            date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            predictedPrice: blendedPrediction
+        });
+    }
+
+    const trend = m > 0 ? "Bullish (Upward)" : "Bearish (Downward)";
+
+    return res.json({
+        symbol: searchSymbol,
+        trend,
+        slope: m,
+        currentPrice: prices[n-1],
+        predictions
+    });
+
+  } catch (err) {
+    console.warn(`⚠️ Prediction error for ${inputSymbol}:`, err.message);
+    
+    // Fallback simulation
+    const currentPrice = 150 + Math.random() * 50;
+    const mockM = Math.random() * 2 - 1; // random slope between -1 and 1
+    const predictions = [];
+    for(let i=1; i<=5; i++) {
+      predictions.push({
+        day: i,
+        date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        predictedPrice: currentPrice + (mockM * i)
+      });
+    }
+    
+    return res.json({
+      symbol: inputSymbol,
+      trend: mockM > 0 ? "Bullish (Upward) - Mock" : "Bearish (Downward) - Mock",
+      slope: mockM,
+      currentPrice,
+      predictions,
+      isMock: true
+    });
+  }
+});
+
 app.get("/api/fetch-upi", (req, res) => {
   const mockUPI = [
     { desc: "Zomato Fresh Order", amount: 450, date: new Date().toISOString().split("T")[0] },
