@@ -578,9 +578,9 @@ app.get("/api/fetch-upi", (req, res) => {
 });
 
 // --- Serve Frontend Static Files (Monolithic Deployment) ---
-app.use(express.static(path.join(__dirname, "../dist")));
+app.use(express.static(path.resolve(__dirname, '..', 'dist')));
 app.use((req, res) => {
-  res.sendFile(path.join(__dirname, "../dist/index.html"));
+  res.sendFile(path.resolve(__dirname, '..', 'dist', 'index.html'));
 });
 
 server.listen(PORT, () => {
