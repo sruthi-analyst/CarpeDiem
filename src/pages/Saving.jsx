@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from "recharts";
 import { motion } from "framer-motion";
-import { Wallet, Landmark, TrendingUp, ShieldCheck, Plane, Car, Home } from "lucide-react";
+import { Wallet, Landmark, TrendingUp, ShieldCheck, Plane, Car, Home, Save, Loader2 } from "lucide-react";
+import { supabase } from "../supabaseClient";
 
 const COLORS = ["#4B3F2F", "#D1A46D", "#8E6E53", "#F6C7B4", "#FFD700", "#B5651D"];
 
@@ -23,8 +24,64 @@ export default function Saving() {
   });
   const [locked, setLocked] = useState({});
   const [newName, setNewName] = useState("");
-  const [expectedRate, setExpectedRate] = useState(7); // 7% annual returns
+  const [expectedRate, setExpectedRate] = useState(7);
   const [years, setYears] = useState(5);
+  const [session, setSession] = useState(null);
+  const [saveLoading, setSaveLoading] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) fetchSavedConfig(session.user.id);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchSavedConfig = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('savings_config')
+        .eq('id', userId)
+        .single();
+
+      if (data?.savings_config && Object.keys(data.savings_config).length > 0) {
+        const config = data.savings_config;
+        setTotal(config.total ?? 10000);
+        setFunds(config.funds ?? {});
+        setExpectedRate(config.expectedRate ?? 7);
+        setYears(config.years ?? 5);
+        setLocked(config.locked ?? {});
+      }
+    } catch (err) {
+      console.warn("Could not load savings config:", err);
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    if (!session) {
+      alert("Please login first to save your goals!");
+      return;
+    }
+    setSaveLoading(true);
+    const config = { total, funds, expectedRate, years, locked };
+
+    const { error } = await supabase
+      .from('profiles')
+      .upsert({ 
+        id: session.user.id,
+        savings_config: config 
+      });
+
+    setSaveLoading(false);
+    if (error) alert("Error saving: " + error.message);
+    else alert("Project goals saved to cloud! ✅");
+  };
 
   const percentage = (value) => {
     if (!total || isNaN(value) || value <= 0) return 0;
@@ -40,7 +97,7 @@ export default function Saving() {
     const lockedKeys = Object.keys(funds).filter((k) => locked[k]);
     const unlockedKeys = Object.keys(funds).filter((k) => !locked[k] && k !== name);
     const lockedTotal = lockedKeys.reduce((sum, k) => sum + (k === name ? 0 : funds[k]), 0);
-    
+
     value = Math.min(value, total - lockedTotal);
     let newFunds = { ...funds, [name]: value };
     const remainingTotal = total - lockedTotal - value;
@@ -80,13 +137,23 @@ export default function Saving() {
   return (
     <div className="min-h-screen bg-[#fdf6f0] p-6 text-[#4b2e23]">
       <div className="max-w-6xl mx-auto">
-        <motion.h1 initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-4xl font-extrabold mb-8 text-center flex items-center justify-center gap-3">
-          <Wallet className="text-[#a0522d]" size={40} /> Wealth Builder
-        </motion.h1>
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+          <motion.h1 initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-4xl font-extrabold flex items-center gap-3">
+            <Wallet className="text-[#a0522d]" size={40} /> Wealth Builder
+          </motion.h1>
+
+          <button
+            onClick={handleSaveConfig}
+            disabled={saveLoading}
+            className="flex items-center gap-2 bg-[#4b2e23] text-white px-6 py-3 rounded-full font-bold shadow-lg hover:opacity-90 transition disabled:opacity-50"
+          >
+            {saveLoading ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
+            {saveLoading ? "Saving..." : "Save Configuration"}
+          </button>
+        </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
-          
-          {/* Left: Settings & Allocation */}
+
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white p-6 rounded-2xl shadow-lg border border-amber-100">
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">💰 Monthly Saving Amount</h2>
@@ -123,9 +190,9 @@ export default function Saving() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-bold">₹{item.value.toLocaleString()}</span>
-                        <button 
-                         onClick={() => toggleLock(item.id)}
-                         className={`text-xs px-2 py-1 rounded transition ${locked[item.id] ? "bg-red-500 text-white" : "bg-white text-gray-400"}`}
+                        <button
+                          onClick={() => toggleLock(item.id)}
+                          className={`text-xs px-2 py-1 rounded transition ${locked[item.id] ? "bg-red-500 text-white" : "bg-white text-gray-400"}`}
                         >
                           {locked[item.id] ? "Locked" : "Lock"}
                         </button>
@@ -146,10 +213,9 @@ export default function Saving() {
             </div>
           </div>
 
-          {/* Right: Insights & Projections */}
           <div className="space-y-6">
             <div className="bg-[#4b2e23] text-white p-6 rounded-2xl shadow-xl">
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><TrendingUp size={20}/> 2026 Growth Projector</h3>
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><TrendingUp size={20} /> 2026 Growth Projector</h3>
               <div className="space-y-4">
                 <div>
                   <label className="text-xs opacity-70">Estimated Returns (%)</label>
@@ -190,6 +256,13 @@ export default function Saving() {
                 ))}
               </div>
             </div>
+
+            {!session && (
+              <div className="bg-amber-100 p-4 rounded-xl text-center text-sm border-2 border-dashed border-amber-300">
+                <p className="font-bold">⚠️ Local Mode</p>
+                <p>Login to save these goals to the cloud.</p>
+              </div>
+            )}
           </div>
 
         </div>

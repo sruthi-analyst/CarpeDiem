@@ -1,7 +1,28 @@
 import Logo from '../assets/logo1.jpg';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
 
 export default function Navbar({ onFeaturesClick, onAboutClick, onContactClick }) {
+  const [session, setSession] = useState(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/');
+  };
   return (
     <nav className="bg-[#fdf6f0] flex items-center justify-between px-8 py-6">
       <Link to="/" className="flex items-center gap-2">
@@ -32,9 +53,21 @@ export default function Navbar({ onFeaturesClick, onAboutClick, onContactClick }
         </button>
       </div>
 
-      <button className="bg-[#4b2e23] text-white px-5 py-2 rounded-full">
-        Get Started
-      </button>
+      {session ? (
+        <button 
+          onClick={handleLogout}
+          className="bg-[#4b2e23] text-white px-5 py-2 rounded-full hover:opacity-90"
+        >
+          Logout
+        </button>
+      ) : (
+        <Link 
+          to="/auth"
+          className="bg-[#4b2e23] text-white px-5 py-2 rounded-full hover:opacity-90"
+        >
+          Get Started
+        </Link>
+      )}
     </nav>
   );
 }

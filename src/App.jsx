@@ -11,6 +11,7 @@ import StockAnalysis from "./pages/StockAnalysis";
 import ShowPolicy from "./pages/ShowPolicy";
 import StockPredictor from "./pages/StockPredictor";
 import StockNews from "./pages/StockNews";
+import Auth from "./pages/Auth";
 
 function AppContent() {
   const location = useLocation();
@@ -30,6 +31,7 @@ function AppContent() {
         <Route path="/policy" element={<ShowPolicy />} />
         <Route path="/stock-predictor" element={<StockPredictor />} />
         <Route path="/stock-news" element={<StockNews />} />
+        <Route path="/auth" element={<Auth />} />
       </Routes>
 
       <ChatbotSidebar />
