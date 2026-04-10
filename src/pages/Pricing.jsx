@@ -49,7 +49,7 @@ export default function Pricing() {
   const fetchUPIExpenses = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:3001/api/fetch-upi");
+      const res = await fetch("/api/fetch-upi");
       const data = await res.json();
       const processed = data.map((item) => ({
         ...item,

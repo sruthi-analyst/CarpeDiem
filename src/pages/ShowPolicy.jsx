@@ -18,7 +18,7 @@ export default function Policies() {
     setPolicies([]);
 
     try {
-      const res = await fetch("http://localhost:3001/api/policies", {
+      const res = await fetch("/api/policies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ city, age })

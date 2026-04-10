@@ -6,11 +6,16 @@ import fs from "fs";
 import multer from "multer";
 import FormData from "form-data";
 import http from "http";
+import path from "path";
+import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
@@ -570,6 +575,12 @@ app.get("/api/fetch-upi", (req, res) => {
     { desc: "Sip Weekly Contribution", amount: 1000, date: new Date().toISOString().split("T")[0] }
   ];
   res.json(mockUPI);
+});
+
+// --- Serve Frontend Static Files (Monolithic Deployment) ---
+app.use(express.static(path.join(__dirname, "../dist")));
+app.use((req, res) => {
+  res.sendFile(path.join(__dirname, "../dist/index.html"));
 });
 
 server.listen(PORT, () => {

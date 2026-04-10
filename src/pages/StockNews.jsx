@@ -11,8 +11,8 @@ export default function StockNews() {
     setError("");
     try {
       const url = searchSymbol 
-        ? `http://localhost:3001/api/market-news?symbol=${searchSymbol}`
-        : `http://localhost:3001/api/market-news`;
+        ? `/api/market-news?symbol=${searchSymbol}`
+        : `/api/market-news`;
       const res = await fetch(url);
       const data = await res.json();
       

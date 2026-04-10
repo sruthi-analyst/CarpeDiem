@@ -32,7 +32,7 @@ export default function StockPredictor() {
     setPredictionData(null);
 
     try {
-      const res = await fetch(`http://localhost:3001/api/stock-predict/${finalSymbol}`);
+      const res = await fetch(`/api/stock-predict/${finalSymbol}`);
       const data = await res.json();
       if (data.error) {
         setError(data.error);

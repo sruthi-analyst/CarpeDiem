@@ -37,7 +37,7 @@ export default function StockAnalysis() {
     setStockData(null);
 
     try {
-      const res = await fetch(`http://localhost:3001/api/stock/${finalSymbol}`);
+      const res = await fetch(`/api/stock/${finalSymbol}`);
       const data = await res.json();
       if (data.error) {
         setError(data.error);
@@ -56,7 +56,7 @@ export default function StockAnalysis() {
       try {
         const movers = await Promise.all(
           ["AAPL", "MSFT", "TSLA", "AMZN", "GOOG"].map((sym) =>
-            fetch(`http://localhost:3001/api/stock/${sym}`).then((r) => r.json())
+            fetch(`/api/stock/${sym}`).then((r) => r.json())
           )
         );
         setTopMovers(movers.sort((a, b) => b.changePercent - a.changePercent));
