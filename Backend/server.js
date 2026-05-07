@@ -143,10 +143,11 @@ let financeEmbedding;
 })();
 
 // --- AI Helper: Upgraded to OpenAI (ChatGPT) Integration ---
+// --- AI Helper: Upgraded to OpenAI (ChatGPT) Integration ---
 async function callAI(prompt, model = "gpt-4o-mini") {
   try {
     const openaiKey = process.env.OPENAI_API_KEY;
-    if (!openaiKey) throw new Error("OpenAI Key missing");
+    if (!openaiKey || openaiKey.includes("sk-proj-EKB")) throw new Error("OpenAI Key missing or invalid");
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -166,14 +167,32 @@ async function callAI(prompt, model = "gpt-4o-mini") {
     
     return data.choices?.[0]?.message?.content || "No response from OpenAI.";
   } catch (err) {
-    console.warn("⚠️ OpenAI failed. Using internal fallback.", err.message);
-    // Simulated internal brain for critical paths
+    console.warn("⚠️ OpenAI failed. Attempting Ollama fallback...", err.message);
+    
+    // Try Ollama as a fallback instead of hardcoded JSON
+    try {
+      const ollamaRes = await fetch("http://localhost:11434/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "granite3.3:2b",
+          prompt: prompt,
+          stream: false,
+        }),
+      });
+      const ollamaData = await ollamaRes.json();
+      if (ollamaData.response) return ollamaData.response;
+    } catch (ollamaErr) {
+      console.error("❌ Ollama also failed:", ollamaErr.message);
+    }
+
+    // Last resort fallback
     if (prompt.toLowerCase().includes("budget")) return "For budgeting, I recommend the 50/30/20 rule: 50% for needs, 30% for wants, and 20% for savings.";
     if (prompt.toLowerCase().includes("policies")) return JSON.stringify([
       { name: "Pradhan Mantri Suraksha Bima Yojana", eligibility: "18-70 years", benefits: "₹2 Lakh accidental death cover", official_link: "https://www.jansuraksha.gov.in/" },
-      { name: "Post Office Savings", eligibility: "Any Indian citizen", benefits: "High interest secure deposits", official_link: "https://www.indiapost.gov.in/" }
+      { name: "Ayushman Bharat PM-JAY", eligibility: "Low-income families", benefits: "₹5 Lakh health cover per year", official_link: "https://pmjay.gov.in/" }
     ]);
-    return "I am having trouble reaching the OpenAI servers. Please check your internet or API key limits.";
+    return "I am having trouble reaching the AI servers. Please check your internet or API key limits.";
   }
 }
 
@@ -197,8 +216,6 @@ app.post("/api/chat", async (req, res) => {
       const similarity = cosineSimilarity(financeEmbedding, promptEmbedding);
       console.log(`🔍 Similarity Score: ${similarity.toFixed(3)} (Passed through to Ollama)`);
     }
-
-
 
     // Call Ollama directly for the chatbot sidebar (no OpenAI key)
     let aiResponse;
@@ -235,22 +252,98 @@ app.post("/api/chat", async (req, res) => {
 
 
 // ---- Policies API (Relocated from Frontend to avoid Quota issues) ----
+const INDIAN_STATES = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", 
+  "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", 
+  "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", 
+  "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", 
+  "Uttarakhand", "West Bengal", "Andaman and Nicobar Islands", "Chandigarh", 
+  "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Jammu and Kashmir", 
+  "Ladakh", "Lakshadweep", "Puducherry"
+];
+
 app.post("/api/policies", async (req, res) => {
   try {
-    const { city, age } = req.body;
-    const prompt = `Give 3 government schemes and insurance policies for city "${city}" and age ${age} in JSON format ONLY: [{"name":"...","eligibility":"...","benefits":"...","official_link":"..."}]`;
+    const { city, state, age, gender, occupation, income } = req.body;
+
+    // Validation
+    if (!state || !INDIAN_STATES.includes(state)) {
+      return res.status(400).json({ error: "Please select a valid Indian state or UT." });
+    }
+    
+    const ageNum = parseInt(age);
+    if (isNaN(ageNum) || ageNum < 0 || ageNum > 120) {
+      return res.status(400).json({ error: "Please enter a valid age (0-120)." });
+    }
+
+    let extraNudge = "";
+    if (ageNum <= 10 && gender === "Female") {
+      extraNudge = " IMPORTANT: You MUST include 'Sukanya Samriddhi Yojana' as it is the most relevant scheme for a girl child under 10 in India.";
+    }
+
+    const prompt = `
+      As a financial advisor, find 4-5 relevant Indian government schemes or insurance policies for a person with the following profile:
+      - Location: ${city || "Any city"}, ${state}, India
+      - Age: ${age}
+      - Gender: ${gender || "Any"}
+      - Occupation: ${occupation || "Any"}
+      - Annual Income Category: ${income || "Any"}
+      ${extraNudge}
+
+      Return ONLY a JSON array of objects with the following keys:
+      "name" (full name of the scheme),
+      "eligibility" (who is eligible),
+      "benefits" (key benefits),
+      "official_link" (URL to the official government portal).
+
+      JSON format ONLY: [{"name":"...","eligibility":"...","benefits":"...","official_link":"..."}]
+    `;
+
     const response = await callAI(prompt);
     
     let parsed;
     try {
-      parsed = JSON.parse(response);
+      // Clean up response if AI adds markdown backticks
+      const cleanResponse = response.replace(/```json|```/g, "").trim();
+      parsed = JSON.parse(cleanResponse);
     } catch {
       const match = response.match(/\[.*\]/s);
       parsed = match ? JSON.parse(match[0]) : [];
     }
+    
+    // Ensure we always return an array
+    if (!Array.isArray(parsed)) parsed = [];
+
+    // Filter out irrelevant schemes for children (AI sometimes hallucinates APY/NPS for kids)
+    if (ageNum < 18) {
+      const adultKeywords = ["nps", "atal pension", "apy", "retirement", "pension scheme for senior", "senior citizen", "public provident fund"];
+      parsed = parsed.filter(p => !adultKeywords.some(k => p.name.toLowerCase().includes(k)));
+    }
+
+    // Manual Injection/Correction for Sukanya Samriddhi Yojana for girls under 10
+    if (ageNum <= 10 && gender === "Female") {
+      const ssyIndex = parsed.findIndex(p => p.name.toLowerCase().includes("sukanya") || p.name.toLowerCase().includes("samriddhi"));
+      
+      const officialSSY = {
+        name: "Sukanya Samriddhi Yojana (SSY)",
+        eligibility: "Girl child below 10 years of age (Indian citizen)",
+        benefits: "High interest rate (8.2% currently), Tax benefits under 80C, maturity at age 21 or marriage after 18.",
+        official_link: "https://www.nsiindia.gov.in/InternalPage.aspx?Id_Pk=89"
+      };
+
+      if (ssyIndex === -1) {
+        // Not found at all, add to top
+        parsed.unshift(officialSSY);
+      } else {
+        // Found but might be hallucinated or poorly described, replace it
+        parsed[ssyIndex] = officialSSY;
+      }
+    }
+    
     res.json(parsed);
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch policies" });
+    console.error("Policy Error:", err);
+    res.status(500).json({ error: "Failed to fetch policies. Please try again later." });
   }
 });
 
