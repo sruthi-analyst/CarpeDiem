@@ -21,7 +21,7 @@ export default function StockPredictor() {
   const popularStocks = [
     { name: "Apple", symbol: "AAPL", color: "bg-pink-100" },
     { name: "Microsoft", symbol: "MSFT", color: "bg-blue-100" },
-    { name: "TypeScript / Tata", symbol: "TATAMOTORS", color: "bg-orange-100" }
+    { name: "Tata", symbol: "TATAMOTORS", color: "bg-orange-100" }
   ];
 
   const fetchPrediction = async (stockSymbol) => {

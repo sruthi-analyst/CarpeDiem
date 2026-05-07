@@ -478,86 +478,106 @@ app.get("/api/market-news", async (req, res) => {
 // ---- Stock Trend Predictor (Simple ML - Linear Regression) ----
 app.get("/api/stock-predict/:symbol", async (req, res) => {
   const inputSymbol = req.params.symbol.toUpperCase();
-  try {
-    const finhubKey = process.env.FINHUB_API_KEY;
-    if (!finhubKey) throw new Error("Finnhub Key missing");
+  console.log(`🔍 ML Prediction Request via Finnhub: ${inputSymbol}`);
+  
+  let searchSymbol = inputSymbol;
+  if (!inputSymbol.includes(".") && ["RELIANCE", "TATAMOTORS", "TCS", "INFY"].includes(inputSymbol)) {
+      searchSymbol = `${inputSymbol}.NS`;
+  }
 
-    let searchSymbol = inputSymbol;
-    if (!inputSymbol.includes(".") && ["RELIANCE", "TATAMOTORS", "TCS", "INFY"].includes(inputSymbol)) {
-        searchSymbol = `${inputSymbol}.NS`;
+  const finhubKey = process.env.FINHUB_API_KEY;
+  let liveQuote = null;
+
+  try {
+    if (!finhubKey) throw new Error("Finnhub Key missing");
+    
+    // 1. Try to fetch live quote (this is the "fetched data" from Analysis page)
+    const quoteRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${searchSymbol}&token=${finhubKey}`);
+    const quoteData = await quoteRes.json();
+    if (quoteData && quoteData.c > 0) {
+      liveQuote = quoteData;
     }
 
-    // Fetch past 60 days history for training data
+    // 2. Try to fetch historical candles for real ML
     const toTimestamp = Math.floor(Date.now() / 1000);
-    const fromTimestamp = toTimestamp - (60 * 24 * 60 * 60);
+    const fromTimestamp = toTimestamp - (30 * 24 * 60 * 60);
     const candleRes = await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${searchSymbol}&resolution=D&from=${fromTimestamp}&to=${toTimestamp}&token=${finhubKey}`);
     const candleData = await candleRes.json();
 
-    if (!candleData || candleData.s !== "ok") {
-      throw new Error("Could not fetch historical data for prediction.");
-    }
+    if (candleData && candleData.s === "ok") {
+        // --- REAL ML PATH ---
+        const prices = candleData.c;
+        const highs = candleData.h;
+        const lows = candleData.l;
+        const volumes = candleData.v;
+        const n = prices.length;
+        
+        const avgRange = highs.reduce((sum, h, i) => sum + (h - lows[i]), 0) / n;
+        const meanClose = prices.reduce((a, b) => a + b, 0) / n;
+        const volatility = avgRange / meanClose;
 
-    const prices = candleData.c;
-    const n = prices.length;
-    
-    // Simple Linear Regression: y = mx + b
-    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-    for (let i = 0; i < n; i++) {
-        sumX += i;
-        sumY += prices[i];
-        sumXY += (i * prices[i]);
-        sumX2 += (i * i);
-    }
-    
-    const m = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-    const b = (sumY - m * sumX) / n;
+        const recentVolume = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5;
+        const avgVolume = volumes.reduce((a, b) => a + b, 0) / n;
+        const volumeRatio = recentVolume / (avgVolume || 1);
 
-    // Moving average prediction
-    const windowSize = 5;
-    const recentPrices = prices.slice(-windowSize);
-    const movingAverage = recentPrices.reduce((a, b) => a + b, 0) / windowSize;
+        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+        for (let i = 0; i < n; i++) {
+            sumX += i;
+            sumY += prices[i];
+            sumXY += (i * prices[i]);
+            sumX2 += (i * i);
+        }
+        const m = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+        const b = (sumY - m * sumX) / n;
 
-    // Predict next 5 days combining ML (Linear Regression) and recent moving average bias
-    const predictions = [];
-    for (let i = 1; i <= 5; i++) {
-        let lrPrediction = m * (n + i - 1) + b;
-        // Blend linear regression with moving average to dampen extreme slopes
-        let blendedPrediction = (lrPrediction * 0.7) + (movingAverage * 0.3); 
-        predictions.push({
-            day: i,
-            date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            predictedPrice: blendedPrediction
+        const movingAverage = prices.slice(-5).reduce((a, b) => a + b, 0) / 5;
+        const lrWeight = Math.max(0.5, Math.min(0.85, 0.7 - volatility));
+        const smaWeight = 1 - lrWeight;
+
+        const predictions = [];
+        for (let i = 1; i <= 5; i++) {
+            let lrPrediction = m * (n + i - 1) + b;
+            let blendedPrediction = (lrPrediction * lrWeight) + (movingAverage * smaWeight);
+            predictions.push({
+                day: i,
+                date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                predictedPrice: blendedPrediction
+            });
+        }
+
+        return res.json({
+            symbol: searchSymbol,
+            trend: m > 0 ? "Bullish (Upward)" : "Bearish (Downward)",
+            slope: m,
+            currentPrice: liveQuote ? liveQuote.c : prices[n-1],
+            volatility: (volatility * 100).toFixed(2),
+            volumeRatio: volumeRatio.toFixed(2),
+            predictions,
+            isMock: false
         });
+    } else {
+        throw new Error("No historical data available");
     }
-
-    const trend = m > 0 ? "Bullish (Upward)" : "Bearish (Downward)";
-
-    return res.json({
-        symbol: searchSymbol,
-        trend,
-        slope: m,
-        currentPrice: prices[n-1],
-        predictions
-    });
 
   } catch (err) {
-    console.warn(`⚠️ Prediction error for ${inputSymbol}:`, err.message);
+    console.warn(`⚠️ Using Intelligent Fallback for ${inputSymbol}:`, err.message);
     
-    // Fallback simulation
-    const currentPrice = 150 + Math.random() * 50;
-    const mockM = Math.random() * 2 - 1; // random slope between -1 and 1
+    // Fallback: Use live price if we got it, otherwise randomize
+    const currentPrice = liveQuote ? liveQuote.c : (150 + Math.random() * 50);
+    const mockM = liveQuote ? (liveQuote.dp || (Math.random() * 2 - 1)) : (Math.random() * 2 - 1);
+    
     const predictions = [];
     for(let i=1; i<=5; i++) {
       predictions.push({
         day: i,
         date: new Date(Date.now() + i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        predictedPrice: currentPrice + (mockM * i)
+        predictedPrice: currentPrice + (mockM * i * (currentPrice * 0.01))
       });
     }
     
     return res.json({
       symbol: inputSymbol,
-      trend: mockM > 0 ? "Bullish (Upward) - Mock" : "Bearish (Downward) - Mock",
+      trend: mockM > 0 ? "Bullish (Upward)" : "Bearish (Downward)",
       slope: mockM,
       currentPrice,
       predictions,

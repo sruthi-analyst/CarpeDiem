@@ -132,7 +132,7 @@ export default function Saving() {
     color: COLORS[i % COLORS.length],
   }));
 
-  const totalFutureValue = calculateFutureValue(total, expectedRate, years);
+  const totalFutureValue = calculateFutureValue(funds.investments || 0, expectedRate, years);
 
   return (
     <div className="min-h-screen bg-[#fdf6f0] p-6 text-[#4b2e23]">
@@ -228,9 +228,9 @@ export default function Saving() {
                   <div className="text-right font-bold">{years} yrs</div>
                 </div>
                 <div className="pt-4 border-t border-white/20">
-                  <p className="text-xs opacity-70">Estimated wealth at end of period:</p>
+                  <p className="text-xs opacity-70">Projected value of your <b>investments</b>:</p>
                   <p className="text-3xl font-extrabold text-yellow-400">₹{totalFutureValue.toLocaleString()}</p>
-                  <p className="text-[10px] mt-1 opacity-50">*Based on monthly compounding at {expectedRate}%</p>
+                  <p className="text-[10px] mt-1 opacity-50">*Based on ₹{(funds.investments || 0).toLocaleString()}/month compounded at {expectedRate}%</p>
                 </div>
               </div>
             </div>
